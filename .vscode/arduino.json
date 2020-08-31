@@ -1,0 +1,6 @@
+{
+    "programmer": "Atmel STK500 development board",
+    "board": "arduino:avr:uno",
+    "port": "COM4",
+    "sketch": "zegar.ino"
+}
