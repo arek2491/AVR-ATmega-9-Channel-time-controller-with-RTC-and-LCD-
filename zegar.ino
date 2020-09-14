@@ -20,10 +20,11 @@
 #define can8 9
 #define can9 10
 
- long screensaver = 0;
- long lightPause = 0;
- long pause4 = 0;
- long pause = 0;
+ unsigned long menuEnter = 0;
+ unsigned long screensaver = 0;
+ unsigned long lightPause = 0;
+ unsigned long pause4 = 0;
+ unsigned long pause = 0;
  long switchMenuCounter = 1;
  long switchLightCounter = 1;
  bool menuFlag = true;
@@ -35,6 +36,8 @@
  int tempHour = 0;
  int tempMinute = 0;
  int tempSecond = 0;
+ int sensor;
+ float voltage;
 
  MyRealTimeClock tm(11,12,13);
  LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);
@@ -146,14 +149,14 @@ class Canal {
   delay(400);
   bool flag = true;
   long counter = 1;
-  long tempPause = 0;
-  long tempPause1 = 0;
-  long tempPause2 = 0;
-  long tempPause3 = 0;
-  long tempPause4 = 0;
-  long tempPause5 = 0;
-  long tempPause6 = 0;
-  long tempPause7 = 0;
+  unsigned long tempPause = 0;
+  unsigned long tempPause1 = 0;
+  unsigned long tempPause2 = 0;
+  unsigned long tempPause3 = 0;
+  unsigned long tempPause4 = 0;
+  unsigned long tempPause5 = 0;
+  unsigned long tempPause6 = 0;
+  unsigned long tempPause7 = 0;
  
   
   
@@ -676,6 +679,13 @@ class Canal {
   }
 
   void executor(int canal) {
+    int startTime1, stopTime1, startTime2, stopTime2, mainTime;
+
+    mainTime = hours * 100 + minutes;
+    startTime1 = startHour1 * 100 + startMinute1;
+    stopTime1 = stopHour1 * 100 + stopMinute1;
+    startTime2 = startHour2 * 100 + startMinute2;
+    stopTime2 =  stopHour2 * 100 + stopMinute2;
 
     if(startHour1 == 0 && startMinute1 == 0 && stopHour1 == 0 && stopMinute1 == 0) {
       isActive1 = false;
@@ -690,26 +700,51 @@ class Canal {
       isActive2 = true;
     }
    
-   if(isActive1) {
-    if(startHour1 == hours && startMinute1 == minutes) {
+   
+   if(isActive1 && isActive2) {
+     if((stopTime1 < startTime1 && (mainTime < stopTime1 || mainTime > startTime1)) || (stopTime1 > startTime1 && mainTime >= startTime1 && mainTime < stopTime1)) {
       pinMode(canal, OUTPUT);
       executingTime1 = true;
+      executingTime2 = false;
+     }
+     else if((stopTime2 < startTime2 && (mainTime < stopTime2 || mainTime > startTime2)) || (stopTime2 > startTime2 && mainTime >= startTime2 && mainTime < stopTime2)) {
+      pinMode(canal, OUTPUT);
+      executingTime2 = true;
+      executingTime1 = false;
     }
-    if(stopHour1 == hours && stopMinute1 == minutes) {
+    else {
+      pinMode(canal, INPUT);
+      executingTime1 = false;
+      executingTime2 = false;
+    }
+   }
+   else if(isActive1 && !isActive2) {
+     if((stopTime1 < startTime1 && (mainTime < stopTime1 || mainTime > startTime1)) || (stopTime1 > startTime1 && mainTime >= startTime1 && mainTime < stopTime1)) {
+      pinMode(canal, OUTPUT);
+      executingTime1 = true;
+     }
+    else {
       pinMode(canal, INPUT);
       executingTime1 = false;
     }
    }
-   if(isActive2) {
-    if(startHour2 == hours && startMinute2 == minutes) {
+   else if(!isActive1 && isActive2) {
+    
+     if((stopTime2 < startTime2 && (mainTime < stopTime2 || mainTime > startTime2)) || (stopTime2 > startTime2 && mainTime >= startTime2 && mainTime < stopTime2)) {
       pinMode(canal, OUTPUT);
       executingTime2 = true;
     }
-    if(stopHour2 == hours && stopMinute2 == minutes) {
+    else {
       pinMode(canal, INPUT);
       executingTime2 = false;
     }
    }
+   else{ 
+     pinMode(canal, INPUT);
+     executingTime1 = false;
+     executingTime2 = false;
+   }
+   
   }
 
   void displayCanalA(int canal, int rows, int cols) {
@@ -717,22 +752,26 @@ class Canal {
     if(!isActive1) {
       lcd.print("-");
     }
-    else if(executingTime1) {
+    else if(isActive1 && executingTime1) {
       lcd.print("a");
-    } else {
-      lcd.print("*");
     }
+    else if(isActive1 && !executingTime1) {
+      lcd.print("*");
+    } 
+    
   }
   void displayCanalB(int canal, int rows, int cols) {
     lcd.setCursor(rows, cols);
     if(!isActive2) {
       lcd.print("-");
     }
-    else if(executingTime2) {
+    else if(isActive2 && executingTime2) {
       lcd.print("b");
-    } else {
-      lcd.print("*");
     }
+    else if(isActive2 && !executingTime2) {
+      lcd.print("*");
+    } 
+    
   }
 
 };
@@ -748,6 +787,17 @@ Canal canal7;
 Canal canal8;
 Canal canal9;
 
+void checkBattery() {
+  lcd.clear();
+  sensor = analogRead(A5);
+  voltage = sensor * (5.0/1024.0);
+  lcd.setCursor(1, 0);
+  lcd.print("Napiecie baterii:");
+  lcd.setCursor(5, 1);
+  lcd.print(voltage);
+  lcd.print("V");
+}
+
 void restartBattery() {
   tm.setDS1302Time(0,0,0,1,1,1,2020);
   resetFunc();
@@ -755,31 +805,25 @@ void restartBattery() {
 
 void displayActuallyTimes() {
   long pause = 0;
-  if(millis() - pause > 200) {
   lcd.setCursor(0, 2);
-  lcd.print("1");
+  lcd.print("1 ");
   lcd.setCursor(2, 2);
-  lcd.print("2");
+  lcd.print("2 ");
   lcd.setCursor(4, 2);
-  lcd.print("3");
+  lcd.print("3 ");
   lcd.setCursor(6, 2);
-  lcd.print("4");
+  lcd.print("4 ");
   lcd.setCursor(8, 2);
-  lcd.print("5");
+  lcd.print("5 ");
   lcd.setCursor(10, 2);
-  lcd.print("6");
+  lcd.print("6 ");
   lcd.setCursor(12, 2);
-  lcd.print("7");
+  lcd.print("7 ");
   lcd.setCursor(14, 2);
-  lcd.print("8");
+  lcd.print("8 ");
   lcd.setCursor(16, 2);
-  lcd.print("9");
-  
+  lcd.print("9 ");
 
-
-  
-   pause = millis();
-  }
   
 
   
@@ -790,6 +834,7 @@ void prepareLcd() {
   lcd.setCursor(7, 1);
   lcd.print("Witaj !");
   delay(1000);
+  lcd.clear();
 }
 
 
@@ -806,10 +851,7 @@ void prepareRtc() {
 }
 
 void mainDateAndTime() {
-ENUM_BUTTON button = getButton();
-  
-if(millis() - pause > 900) {
-lcd.clear(); 
+lcd.setCursor(0, 0);
 lcd.print(printTwoDigits(days)); // Element 1
 lcd.print("/"); 
 lcd.print(printTwoDigits(months)); // Element 2
@@ -826,8 +868,8 @@ lcd.print(printTwoDigits(seconds)); // Element 6
 lcd.print(" ");
 displayActuallyTimes();
 executor();
-pause = millis();
-}
+
+
 
 
 
@@ -874,15 +916,7 @@ void setTime() {
   
   
   while(flag) {
- canal1.executor(can1);
-  canal2.executor(can2);
-  canal3.executor(can3);
-  canal4.executor(can4);
-  canal5.executor(can5);
-  canal6.executor(can6);
-  canal7.executor(can7);
-  canal8.executor(can8);
-  canal9.executor(can9);
+
   
    ENUM_BUTTON button = getButton();
    screensaver = millis();
@@ -1130,7 +1164,9 @@ void reset() {
 }
 
 
-
+long switchAutoButton = 1;
+unsigned long autoButtonPause = 0;
+bool switchAuto = false;
 
 void loop() 
 {   
@@ -1144,11 +1180,28 @@ void loop()
       
        displayFromMemory();
    
- 
+   
+   if(button == BUT1) {
+     if(millis() - autoButtonPause > 1000) {
+       switchAutoButton++;
+       
+       autoButtonPause = millis();
+     }
+     
+   }
+
+    if(switchAutoButton == 3) {
+     switchAutoButton = 1;
+   }
+  
    
    if(button == BUT2) {
+     if(millis() - menuEnter > 1000) {
     switchMenuCounter++;
+    
     screensaver = millis();
+    menuEnter = millis();
+     }
    }
    if(button == BUT5) {
     if(millis() - lightPause > 1000) {
@@ -1157,13 +1210,13 @@ void loop()
     lightPause = millis();
     }
    }
+
+  
    if(switchLightCounter == 3) {
     switchLightCounter = 1;
    }
-   
   
    
-  
    
    if(switchMenuCounter % 2 != 0) {
       menuFlag = true;
@@ -1184,17 +1237,28 @@ void loop()
    if(switchLightCounter == 2) {
     light = false;
    }
+
+   if(switchAutoButton == 2) {
+    switchAuto = true;
+        
+   }
+
+    if(switchAutoButton == 1) {
+    switchAuto = false;
+   }
    
   
   
-
-   if(menuFlag) {
+   if(menuFlag && !switchAuto) {
      prepareRtc();
-     mainDateAndTime();
+     mainDateAndTime();  
+     
    }
-   if(!menuFlag) {
+   
+
+   if(!menuFlag && !switchAuto) {
     drawMenu();
-  
+    
     
    }
    if(light) {
@@ -1203,6 +1267,14 @@ void loop()
    if(!light) {
     lcd.noBacklight();
    }
+
+   if(menuFlag && switchAuto) {
+     prepareRtc();
+     lightOn();
+    
+   }
+
+   
    
 
    pause4 = millis();
@@ -1279,6 +1351,7 @@ void lastNumberDelay() {
     delay(65);
     lcd.setCursor(3, 0);
     lcd.print(printTwoDigits(tempMinute));
+    
     tempPause = millis();
     
     }
@@ -1539,16 +1612,16 @@ void setCanals() {
 
   bool flag = true;
   int counter = 0;
-  long tempPause = 0;
-  long tempPause1 = 0;
-  long tempPause2 = 0;
-  long tempPause3 = 0;
-  long tempPause4 = 0;
-  long tempPause5 = 0;
-  long tempPause6 = 0;
-  long tempPause7 = 0;
-  long tempPause8 = 0;
-  long tempPause9 = 0;
+  unsigned long tempPause = 0;
+  unsigned long tempPause1 = 0;
+  unsigned long tempPause2 = 0;
+  unsigned long tempPause3 = 0;
+  unsigned long tempPause4 = 0;
+  unsigned long tempPause5 = 0;
+  unsigned long tempPause6 = 0;
+  unsigned long tempPause7 = 0;
+  unsigned long tempPause8 = 0;
+  unsigned long tempPause9 = 0;
 
   while(flag) {
   canal1.executor(can1);
@@ -1612,52 +1685,44 @@ void setCanals() {
        EEPROM.write(5, canal1.startMinute2);
        EEPROM.write(6, canal1.stopHour2);
        EEPROM.write(7, canal1.stopMinute2);
-      delay(400);
-      isInLowerLevel = false;
-      flag = false;
-    }
-  }
+       canal2.startHour1 = canal1.startHour1;
+       canal2.stopHour1 = canal1.stopHour1 - 8;
+       canal2.startHour2 = canal1.startHour2 + 21;
+       canal2.stopHour2 = canal1.stopHour2 + 22;
+       canal2.startMinute1 = canal1.startMinute1;
+       canal2.stopMinute1 = canal1.stopMinute1 + 4;
+       canal2.startMinute2 = canal1.startMinute2 + 56;
+       canal2.stopMinute2 = canal1.stopMinute2;
 
-  if(counter == 2) {
-     if(millis() - tempPause1 > 200) {
-  lcd.clear();
-  
-  lcd.setCursor(6,0);
-  lcd.print("K3");
-  lcd.setCursor(9,0);
-  lcd.print("K4");
-  lcd.setCursor(12,0);
-  lcd.print("K5");
-  lcd.setCursor(0,1);
-  lcd.print("K6");
-  lcd.setCursor(3,1);
-  lcd.print("K7");
-  lcd.setCursor(6,1);
-  lcd.print("K8");
-  lcd.setCursor(9,1);
-  lcd.print("K9");
+       canal3.startHour1 = canal1.startHour1;
+       canal3.stopHour1 = canal1.stopHour1 - 8;
+       canal3.startHour2 = canal1.startHour2 + 21;
+       canal3.stopHour2 = canal1.stopHour2 + 22;
+       canal3.startMinute1 = canal1.startMinute1;
+       canal3.stopMinute1 = canal1.stopMinute1 + 3;
+       canal3.startMinute2 = canal1.startMinute2 + 57;
+       canal3.stopMinute2 = canal1.stopMinute2;
 
-  lcd.setCursor(0,0);
-  lcd.print("K1");
-  delay(65);
-  lcd.setCursor(3,0);
-  lcd.print("K2");
-  
-  
-  
- 
-   tempPause1 = millis();
- } 
+       canal4.startHour1 = canal1.startHour1;
+       canal4.stopHour1 = canal1.stopHour1 - 8;
+       canal4.startHour2 = canal1.startHour2 + 21;
+       canal4.stopHour2 = canal1.stopHour2 + 22;
+       canal4.startMinute1 = canal1.startMinute1;
+       canal4.stopMinute1 = canal1.stopMinute1 + 2;
+       canal4.startMinute2 = canal1.startMinute2 + 58;
+       canal4.stopMinute2 = canal1.stopMinute2;
 
-      if(button == BUT2) {
-      canal2.setCanal();
-      lcd.clear();
-      lcd.print("Zapisac?");
-      lcd.setCursor(0,2);
-      lcd.print("ZAPISZ [MENU]");
-      lcd.setCursor(0,3);
-      lcd.print("POPRAW [AUTO]");
-       EEPROM.write(8, canal2.startHour1);
+
+       canal5.startHour1 = canal1.startHour1;
+       canal5.stopHour1 = canal1.stopHour1 - 8;
+       canal5.startHour2 = canal1.startHour2 + 21;
+       canal5.stopHour2 = canal1.stopHour2 + 22;
+       canal5.startMinute1 = canal1.startMinute1;
+       canal5.stopMinute1 = canal1.stopMinute1 + 1;
+       canal5.startMinute2 = canal1.startMinute2 + 59;
+       canal5.stopMinute2 = canal1.stopMinute2;
+
+        EEPROM.write(8, canal2.startHour1);
        EEPROM.write(9, canal2.startMinute1);
        EEPROM.write(10, canal2.stopHour1);
        EEPROM.write(11, canal2.stopMinute1);
@@ -1665,52 +1730,9 @@ void setCanals() {
        EEPROM.write(13, canal2.startMinute2);
        EEPROM.write(14, canal2.stopHour2);
        EEPROM.write(15, canal2.stopMinute2);
-      delay(400);
-      isInLowerLevel = false;
-      flag = false;
-    }
-  }
+    
 
-   if(counter == 3) {
-     if(millis() - tempPause2 > 200) {
-  lcd.clear();
   
- 
-  lcd.setCursor(9,0);
-  lcd.print("K4");
-  lcd.setCursor(12,0);
-  lcd.print("K5");
-  lcd.setCursor(0,1);
-  lcd.print("K6");
-  lcd.setCursor(3,1);
-  lcd.print("K7");
-  lcd.setCursor(6,1);
-  lcd.print("K8");
-  lcd.setCursor(9,1);
-  lcd.print("K9");
- 
-  lcd.setCursor(0,0);
-  lcd.print("K1");
-  lcd.setCursor(3,0);
-  lcd.print("K2");
-  delay(65);
-  lcd.setCursor(6,0);
-  lcd.print("K3");
-  
-  
-  
- 
-   tempPause2 = millis();
- } 
-
-      if(button == BUT2) {
-      canal3.setCanal();
-      lcd.clear();
-      lcd.print("Zapisac?");
-      lcd.setCursor(0,2);
-      lcd.print("ZAPISZ [MENU]");
-      lcd.setCursor(0,3);
-      lcd.print("POPRAW [AUTO]");
        EEPROM.write(16, canal3.startHour1);
        EEPROM.write(17, canal3.startMinute1);
        EEPROM.write(18, canal3.stopHour1);
@@ -1719,52 +1741,7 @@ void setCanals() {
        EEPROM.write(21, canal3.startMinute2);
        EEPROM.write(22, canal3.stopHour2);
        EEPROM.write(23, canal3.stopMinute2);
-      delay(400);
-      isInLowerLevel = false;
-      flag = false;
-    }
-  }
-
-  if(counter == 4) {
-     if(millis() - tempPause3 > 200) {
-  lcd.clear();
-  
- 
-  lcd.setCursor(12,0);
-  lcd.print("K5");
-  lcd.setCursor(0,1);
-  lcd.print("K6");
-  lcd.setCursor(3,1);
-  lcd.print("K7");
-  lcd.setCursor(6,1);
-  lcd.print("K8");
-  lcd.setCursor(9,1);
-  lcd.print("K9");
-  
-  lcd.setCursor(0,0);
-  lcd.print("K1");
-  lcd.setCursor(3,0);
-  lcd.print("K2");
-  lcd.setCursor(6,0);
-  lcd.print("K3");
-  delay(65);
-  lcd.setCursor(9,0);
-  lcd.print("K4");
-  
-  
-  
- 
-   tempPause3 = millis();
- } 
-
-      if(button == BUT2) {
-      canal4.setCanal();
-      lcd.clear();
-      lcd.print("Zapisac?");
-      lcd.setCursor(0,2);
-      lcd.print("ZAPISZ [MENU]");
-      lcd.setCursor(0,3);
-      lcd.print("POPRAW [AUTO]");
+      
        EEPROM.write(24, canal4.startHour1);
        EEPROM.write(25, canal4.startMinute1);
        EEPROM.write(26, canal4.stopHour1);
@@ -1773,52 +1750,9 @@ void setCanals() {
        EEPROM.write(29, canal4.startMinute2);
        EEPROM.write(30, canal4.stopHour2);
        EEPROM.write(31, canal4.stopMinute2);
-      delay(400);
-      isInLowerLevel = false;
-      flag = false;
-    }
-  }
+     
 
-  if(counter == 5) {
-     if(millis() - tempPause4 > 200) {
-  lcd.clear();
   
- 
-  lcd.setCursor(0,1);
-  lcd.print("K6");
-  lcd.setCursor(3,1);
-  lcd.print("K7");
-  lcd.setCursor(6,1);
-  lcd.print("K8");
-  lcd.setCursor(9,1);
-  lcd.print("K9");
- 
-  lcd.setCursor(0,0);
-  lcd.print("K1");
-  lcd.setCursor(3,0);
-  lcd.print("K2");
-  lcd.setCursor(6,0);
-  lcd.print("K3");
-  lcd.setCursor(9,0);
-  lcd.print("K4");
-  delay(65);
-  lcd.setCursor(12,0);
-  lcd.print("K5");
-  
-  
-  
- 
-   tempPause4 = millis();
- } 
-
-      if(button == BUT2) {
-      canal5.setCanal();
-      lcd.clear();
-      lcd.print("Zapisac?");
-      lcd.setCursor(0,2);
-      lcd.print("ZAPISZ [MENU]");
-      lcd.setCursor(0,3);
-      lcd.print("POPRAW [AUTO]");
        EEPROM.write(32, canal5.startHour1);
        EEPROM.write(33, canal5.startMinute1);
        EEPROM.write(34, canal5.stopHour1);
@@ -1833,7 +1767,11 @@ void setCanals() {
     }
   }
 
-  if(counter == 6) {
+ 
+      
+   
+
+  if(counter == 2) {
      if(millis() - tempPause5 > 200) {
   lcd.clear();
  
@@ -1886,7 +1824,7 @@ void setCanals() {
     }
   }
 
-   if(counter == 7) {
+   if(counter == 3) {
      if(millis() - tempPause6 > 200) {
   lcd.clear();
  
@@ -1940,7 +1878,7 @@ void setCanals() {
     }
   }
 
-  if(counter == 8) {
+  if(counter == 4) {
      if(millis() - tempPause7 > 200) {
   lcd.clear();
  
@@ -1993,7 +1931,7 @@ void setCanals() {
     }
   }
 
-   if(counter == 9) {
+   if(counter == 5) {
      if(millis() - tempPause8 > 200) {
   lcd.clear();
  
@@ -2050,7 +1988,7 @@ void setCanals() {
 
  
   
-    if(counter == 10) {
+    if(counter == 6) {
       counter = 1;
     }
 
@@ -2059,16 +1997,30 @@ void setCanals() {
   }   
 }
 
-
+unsigned long pause10 = 0;
+bool isChange = false;
 void lightOn() {
   
-  lcd.clear();
-  lcd.print("Swiatlo wlaczone");
-  lcd.setCursor(0,1);
-  lcd.print("Mozna czyscic");
-  digitalWrite(14, LOW);
-  digitalWrite(15, HIGH);
-  digitalWrite(16, HIGH);
-  digitalWrite(17, LOW);
+  lcd.setCursor(0, 0);
+  lcd.print("LIGHT ON       ");
+  lcd.setCursor(0, 1);
+  lcd.print("                    ");
+  lcd.setCursor(0, 2);
+  lcd.print("                    ");
+  lcd.setCursor(0, 3);
+  lcd.print("                    ");
+  
+  pinMode(can1, OUTPUT);
+  pinMode(can2, INPUT);
+  pinMode(can3, INPUT);
+  pinMode(can4, INPUT);
+  pinMode(can5, INPUT);
+  canal6.executor(can6);
+  canal7.executor(can7);
+  canal8.executor(can8);
+  canal9.executor(can9);
+  
+  
+    
 
 }
